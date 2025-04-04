@@ -124,47 +124,60 @@
 
     <script>
         let ws;
+        let qrScanner;
+
 
         document.addEventListener("DOMContentLoaded", function () {
-            if (typeof Html5Qrcode === "undefined") {
-                console.error("Html5Qrcode library failed to load.");
-                return;
-            }
+                if (typeof Html5Qrcode === "undefined") {
+                    console.error("Html5Qrcode library failed to load.");
+                    return;
+                }
 
-            console.log("Html5Qrcode library loaded successfully.");
+                console.log("Html5Qrcode library loaded successfully.");
 
-            Html5Qrcode.getCameras().then(cameras => {
-                if (cameras.length > 0) {
-                    // Find the back camera
-                        let qrScanner = new Html5Qrcode("reader");
+                Html5Qrcode.getCameras().then(cameras => {
+                    if (cameras.length > 0) {
+                        qrScanner = new Html5Qrcode("reader");
                         qrScanner.start(
                             { facingMode: "environment" },
                             { fps: 10, qrbox: 250 },
                             onScanSuccess,
                             onScanError
                         ).catch(err => console.error("QR Scanner Error:", err));
-                } else {
-                    console.error("No cameras available.");
-                }
-            }).catch(err => console.error("Camera access not supported:", err));
-        });
+                    } else {
+                        console.error("No cameras available.");
+                    }
+                }).catch(err => console.error("Camera access not supported:", err));
+            });
 
         
+        // ✅ Define the missing function
+        function onScanError(error) {
+            console.warn("Scan Error:", error);
+        }
 
         function onScanSuccess(decodedText) {
             console.log("QR Code scanned: ", decodedText);
             connectWebSocket(decodedText);
         }
 
-        function onScanError(error) {
-            console.error("Scan Error:", error);
-        }
-
         function connectWebSocket(qrData) {
-            ws = new WebSocket(qrData);
+            let wsUrl = qrData.startsWith("ws://") && location.protocol === "https:"
+                ? qrData.replace("ws://", "wss://")
+                : qrData;
+
+            ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
-                console.log("Connected to server");
+                console.log("✅ Connected to server");
+
+                // Stop the QR scanner when connected
+                if (qrScanner) {
+                    qrScanner.stop().then(() => {
+                        console.log("📷 QR Scanner Stopped.");
+                        document.getElementById("reader").innerHTML = "<p>✅ Connected to Server</p>";
+                    }).catch(err => console.error("❌ Error stopping scanner:", err));
+                }
             };
 
             ws.onmessage = (event) => {
@@ -175,7 +188,13 @@
                     downloadFile(data.name, data.content);
                 }
             };
+
+            ws.onerror = (error) => {
+                console.error("❌ WebSocket Error:", error);
+            };
         }
+
+
 
         function updateFileList(files) {
             let fileList = document.getElementById("file-list");
