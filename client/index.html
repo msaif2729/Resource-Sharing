@@ -133,12 +133,15 @@
 
             console.log("Html5Qrcode library loaded successfully.");
 
-            // Check camera access
+            // Fetch available cameras
             Html5Qrcode.getCameras().then(cameras => {
                 if (cameras.length > 0) {
+                    // Try to find the back camera
+                    let backCamera = cameras.find(cam => cam.label.toLowerCase().includes('back')) || cameras[0];
+
                     let qrScanner = new Html5Qrcode("reader");
                     qrScanner.start(
-                        cameras[0].id, // Use the first available camera
+                        backCamera.id, // Use the back camera
                         { fps: 10, qrbox: 250 },
                         onScanSuccess
                     ).catch(err => console.error("QR Scanner Error:", err));
@@ -147,6 +150,7 @@
                 }
             }).catch(err => console.error("Camera access not supported:", err));
         });
+
 
         function onScanSuccess(decodedText) {
             console.log("QR Code scanned: ", decodedText);
