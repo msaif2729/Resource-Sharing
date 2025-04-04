@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR File Client</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background: linear-gradient(135deg, #f0f0f0, #d6e4ff);
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        /* QR Scanner Section */
+        .scanner-container {
+            background: white;
+            padding: 20px;
+            max-width: 400px;
+            margin: 20px auto;
+            border-radius: 12px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            transition: 0.3s ease;
+        }
+
+        .scanner-container:hover {
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        #reader { 
+            width: 100%;
+            max-width: 350px;
+            margin: auto;
+        }
+
+        /* File List Section */
+        .file-list-container {
+            max-width: 400px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            transition: 0.3s ease;
+        }
+
+        .file-list-container:hover {
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            margin: 10px 0;
+        }
+
+        /* Buttons */
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 18px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.3s ease;
+            outline: none;
+            display: block;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            .scanner-container, .file-list-container {
+                width: 90%;
+            }
+
+            button {
+                font-size: 16px;
+                padding: 14px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>📂 QR File Client</h1>
+
+    <!-- QR Scanner Section -->
+    <div class="scanner-container">
+        <h2>📷 Scan QR Code</h2>
+        <div id="reader"></div>
+    </div>
+
+    <!-- File List Section -->
+    <div class="file-list-container">
+        <h2>📜 Available Files</h2>
+        <ul id="file-list"></ul>
+    </div>
+
+    <script>
+        let ws;
+
+        document.addEventListener("DOMContentLoaded", function () {
+            if (typeof Html5Qrcode === "undefined") {
+                console.error("Html5Qrcode library failed to load.");
+                return;
+            }
+
+            console.log("Html5Qrcode library loaded successfully.");
+
+            // Check camera access
+            Html5Qrcode.getCameras().then(cameras => {
+                if (cameras.length > 0) {
+                    let qrScanner = new Html5Qrcode("reader");
+                    qrScanner.start(
+                        cameras[0].id, // Use the first available camera
+                        { fps: 10, qrbox: 250 },
+                        onScanSuccess
+                    ).catch(err => console.error("QR Scanner Error:", err));
+                } else {
+                    console.error("No cameras found.");
+                }
+            }).catch(err => console.error("Camera access not supported:", err));
+        });
+
+        function onScanSuccess(decodedText) {
+            console.log("QR Code scanned: ", decodedText);
+            connectWebSocket(decodedText);
+        }
+
+        function connectWebSocket(qrData) {
+            ws = new WebSocket(qrData);
+
+            ws.onopen = () => {
+                console.log("Connected to server");
+            };
+
+            ws.onmessage = (event) => {
+                let data = JSON.parse(event.data);
+                if (data.type === "list") {
+                    updateFileList(data.files);
+                } else if (data.type === "file") {
+                    downloadFile(data.name, data.content);
+                }
+            };
+        }
+
+        function updateFileList(files) {
+            let fileList = document.getElementById("file-list");
+            fileList.innerHTML = "";
+            files.forEach(file => {
+                let li = document.createElement("li");
+                li.innerHTML = `<button onclick="requestFile('${file}')">${file}</button>`;
+                fileList.appendChild(li);
+            });
+        }
+
+        function requestFile(fileName) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "download", file: fileName }));
+            }
+        }
+
+        function downloadFile(name, content) {
+            let a = document.createElement("a");
+            a.href = "data:application/octet-stream;base64," + content;
+            a.download = name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
